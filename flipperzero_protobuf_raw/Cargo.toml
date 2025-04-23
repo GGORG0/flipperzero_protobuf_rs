@@ -1,0 +1,18 @@
+[package]
+name = "flipperzero_protobuf_raw"
+version = "0.25.0+1c84fa4"
+edition = "2024"
+
+[dependencies]
+pbjson = "0.7.0"
+pbjson-types = "0.7.0"
+prost = "0.13.5"
+serde = "1.0.219"
+
+[build-dependencies]
+miette = { version = "7.5.0", features = ["fancy"] }
+pbjson-build = "0.7.0"
+prost = "0.13.5"
+prost-build = "0.13.5"
+protox = "0.8.0"
+quote = "1.0.40"

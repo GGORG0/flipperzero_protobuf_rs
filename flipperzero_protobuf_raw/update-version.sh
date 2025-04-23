@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "$(realpath "$0")")" || exit
+
 CHANGELOG="src/proto-src/Changelog"
 CARGO_TOML="Cargo.toml"
 PROTO_SRC="src/proto-src"
