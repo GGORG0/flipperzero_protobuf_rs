@@ -2,6 +2,11 @@
 name = "flipperzero_protobuf_raw"
 version = "0.25.0+1c84fa4"
 edition = "2024"
+authors = ["GGORG <GGORG0@protonmail.com>"]
+license = "GPL-3.0-or-later"
+description = "Raw, automatically generated bindings to the official Flipper Zero protobuf protocol definitions"
+repository = "https://github.com/GGORG0/flipperzero_protobuf_rs"
+categories = ["external-ffi-bindings"]
 
 [dependencies]
 pbjson = "0.7.0"
