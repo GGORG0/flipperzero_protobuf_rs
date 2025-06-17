@@ -1,4 +1,4 @@
-pub mod codec;
+pub(crate) mod codec;
 pub mod error;
 pub mod usb;
 
