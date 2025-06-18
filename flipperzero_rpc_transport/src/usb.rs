@@ -49,6 +49,7 @@ async fn wait_for_pattern(
         let mut read_buffer = [0u8; 1024];
 
         loop {
+            // TODO: this *may* read too much data from the port, which can cause loss of RPC data
             let bytes_read = port.read(&mut read_buffer).await?;
             recent_bytes.extend_from_slice(&read_buffer[0..bytes_read]);
 
