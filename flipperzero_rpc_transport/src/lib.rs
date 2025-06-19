@@ -3,14 +3,16 @@ pub mod error;
 pub mod usb;
 
 use async_trait::async_trait;
-
-use crate::error::Error;
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[async_trait]
 pub trait FlipperZeroRpcTransport {
-    /// Write a single frame of data to the transport.
-    async fn write_frame(&self, data: &[u8]) -> Result<(), Error>;
+    /// Subscribe to the transport's receive channel.
+    fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>>;
 
-    /// Read a single frame of data from the transport.
-    async fn read_frame(&self) -> Result<Vec<u8>, Error>;
+    /// Create a sender to send data to the transport.
+    fn tx(&self) -> mpsc::UnboundedSender<(
+        Vec<u8>,
+        Option<oneshot::Sender<Result<(), crate::error::Error>>>,
+    )>;
 }

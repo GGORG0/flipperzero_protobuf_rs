@@ -1,10 +1,7 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
-    sync::Mutex,
+    sync::{broadcast, mpsc, oneshot},
 };
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -17,8 +14,11 @@ const CLI_PROMPT: [u8; 4] = *b"\n>: ";
 const START_RPC_COMMAND: [u8; 18] = *b"start_rpc_session\n";
 
 pub struct UsbTransport {
-    port_rx: Arc<Mutex<FramedRead<ReadHalf<SerialStream>, FlipperZeroRpcCodec>>>,
-    port_tx: Arc<Mutex<FramedWrite<WriteHalf<SerialStream>, FlipperZeroRpcCodec>>>,
+    rx_sender: broadcast::WeakSender<Vec<u8>>,
+    tx_sender: mpsc::UnboundedSender<(
+        Vec<u8>,
+        Option<oneshot::Sender<Result<(), crate::error::Error>>>,
+    )>,
 }
 
 impl UsbTransport {
@@ -42,18 +42,65 @@ impl UsbTransport {
         // And wait for the terminal echo for our command
         wait_for_pattern(&mut port, &START_RPC_COMMAND).await?;
 
-        let (rx, tx) = tokio::io::split(port);
+        let (port_rx, port_tx) = tokio::io::split(port);
+
+        let port_rx = FramedRead::new(port_rx, FlipperZeroRpcCodec::default());
+        let port_tx = FramedWrite::new(port_tx, FlipperZeroRpcCodec::default());
+
+        let rx_sender = broadcast::Sender::new(32);
+        let (tx_sender, tx_receiver) = mpsc::unbounded_channel();
+
+        tokio::spawn(Self::rx_task(port_rx, rx_sender.clone()));
+        let rx_sender = rx_sender.downgrade();
+
+        tokio::spawn(Self::tx_task(port_tx, tx_receiver));
 
         Ok(UsbTransport {
-            port_rx: Arc::new(Mutex::new(FramedRead::new(
-                rx,
-                FlipperZeroRpcCodec::default(),
-            ))),
-            port_tx: Arc::new(Mutex::new(FramedWrite::new(
-                tx,
-                FlipperZeroRpcCodec::default(),
-            ))),
+            rx_sender,
+            tx_sender,
         })
+    }
+
+    async fn rx_task(
+        mut port_rx: FramedRead<ReadHalf<SerialStream>, FlipperZeroRpcCodec>,
+        rx_sender: broadcast::Sender<Vec<u8>>,
+    ) {
+        while let Some(frame) = port_rx.next().await {
+            match frame {
+                Ok(data) => {
+                    // We don't care about the error, because it means no one is currently subscribed to the channel, which is fine.
+                    rx_sender.send(data).ok();
+                }
+                Err(_) => {
+                    // Because [`FlipperZeroRpcCodec`]'s implementation never returns an error,
+                    // we can only end up here if [`FramedRead`] returns an error,
+                    // which can only happen if we've reached an EOF and tried to read more data,
+                    // which itself will never happen, because we would break out of the loop.
+                    unreachable!(
+                        "Unexpected error in rx_task: FramedRead returned an error, which should not happen"
+                    );
+                }
+            }
+        }
+
+        // Got an EOF - the channel will close automatically, beause the last "hard" sender will be dropped
+    }
+
+    async fn tx_task(
+        mut port_tx: FramedWrite<WriteHalf<SerialStream>, FlipperZeroRpcCodec>,
+        mut tx_receiver: mpsc::UnboundedReceiver<(
+            Vec<u8>,
+            Option<oneshot::Sender<Result<(), crate::error::Error>>>,
+        )>,
+    ) {
+        while let Some((data, callback)) = tx_receiver.recv().await {
+            let res = port_tx.send(&data).await;
+            if let Some(callback) = callback {
+                callback.send(res.map_err(|e| e.into())).ok();
+            }
+        }
+
+        // The channel has been closed (the transport and all other senders have been dropped).
     }
 }
 
@@ -91,20 +138,17 @@ async fn wait_for_pattern(
     })?
 }
 
-#[async_trait]
 impl FlipperZeroRpcTransport for UsbTransport {
-    async fn write_frame(&self, data: &[u8]) -> Result<(), crate::error::Error> {
-        let mut port_tx = self.port_tx.lock().await;
-        Ok(port_tx.send(data).await?)
+    fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>> {
+        self.rx_sender.upgrade().map(|sender| sender.subscribe())
     }
 
-    async fn read_frame(&self) -> Result<Vec<u8>, crate::error::Error> {
-        let mut port_rx = self.port_rx.lock().await;
-        match port_rx.next().await {
-            Some(x) => Ok(x?),
-            None => Err(
-                std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "No data received").into(),
-            ),
-        }
+    fn tx(
+        &self,
+    ) -> mpsc::UnboundedSender<(
+        Vec<u8>,
+        Option<oneshot::Sender<Result<(), crate::error::Error>>>,
+    )> {
+        self.tx_sender.clone()
     }
 }
