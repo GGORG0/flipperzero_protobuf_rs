@@ -1,8 +1,15 @@
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio_serial::{SerialPortBuilderExt, SerialStream};
-use tokio_util::codec::Framed;
+use std::sync::Arc;
 
-use crate::codec::FlipperZeroRpcCodec;
+use async_trait::async_trait;
+use futures_util::{SinkExt, StreamExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
+    sync::Mutex,
+};
+use tokio_serial::{SerialPortBuilderExt, SerialStream};
+use tokio_util::codec::{FramedRead, FramedWrite};
+
+use crate::{FlipperZeroRpcTransport, codec::FlipperZeroRpcCodec};
 use tokio::time::{Duration, timeout};
 
 const FLIPPER_BAUD_RATE: u32 = 115200;
@@ -10,7 +17,8 @@ const CLI_PROMPT: [u8; 4] = *b"\n>: ";
 const START_RPC_COMMAND: [u8; 18] = *b"start_rpc_session\n";
 
 pub struct UsbTransport {
-    port: Framed<SerialStream, FlipperZeroRpcCodec>,
+    port_rx: Arc<Mutex<FramedRead<ReadHalf<SerialStream>, FlipperZeroRpcCodec>>>,
+    port_tx: Arc<Mutex<FramedWrite<WriteHalf<SerialStream>, FlipperZeroRpcCodec>>>,
 }
 
 impl UsbTransport {
@@ -34,8 +42,17 @@ impl UsbTransport {
         // And wait for the terminal echo for our command
         wait_for_pattern(&mut port, &START_RPC_COMMAND).await?;
 
+        let (rx, tx) = tokio::io::split(port);
+
         Ok(UsbTransport {
-            port: Framed::new(port, FlipperZeroRpcCodec::default()),
+            port_rx: Arc::new(Mutex::new(FramedRead::new(
+                rx,
+                FlipperZeroRpcCodec::default(),
+            ))),
+            port_tx: Arc::new(Mutex::new(FramedWrite::new(
+                tx,
+                FlipperZeroRpcCodec::default(),
+            ))),
         })
     }
 }
@@ -72,4 +89,22 @@ async fn wait_for_pattern(
             "Timed out waiting for pattern",
         )
     })?
+}
+
+#[async_trait]
+impl FlipperZeroRpcTransport for UsbTransport {
+    async fn write_frame(&mut self, data: &[u8]) -> Result<(), crate::error::Error> {
+        let mut port_tx = self.port_tx.lock().await;
+        Ok(port_tx.send(data).await?)
+    }
+
+    async fn read_frame(&mut self) -> Result<Vec<u8>, crate::error::Error> {
+        let mut port_rx = self.port_rx.lock().await;
+        match port_rx.next().await {
+            Some(x) => Ok(x?),
+            None => Err(
+                std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "No data received").into(),
+            ),
+        }
+    }
 }
