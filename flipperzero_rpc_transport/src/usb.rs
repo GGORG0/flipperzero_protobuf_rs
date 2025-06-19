@@ -93,12 +93,12 @@ async fn wait_for_pattern(
 
 #[async_trait]
 impl FlipperZeroRpcTransport for UsbTransport {
-    async fn write_frame(&mut self, data: &[u8]) -> Result<(), crate::error::Error> {
+    async fn write_frame(&self, data: &[u8]) -> Result<(), crate::error::Error> {
         let mut port_tx = self.port_tx.lock().await;
         Ok(port_tx.send(data).await?)
     }
 
-    async fn read_frame(&mut self) -> Result<Vec<u8>, crate::error::Error> {
+    async fn read_frame(&self) -> Result<Vec<u8>, crate::error::Error> {
         let mut port_rx = self.port_rx.lock().await;
         match port_rx.next().await {
             Some(x) => Ok(x?),
