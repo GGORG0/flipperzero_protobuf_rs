@@ -6,12 +6,14 @@ use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[async_trait]
-pub trait FlipperZeroRpcTransport {
+pub trait FzRpcTransport {
     /// Subscribe to the transport's receive channel.
     fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>>;
 
     /// Create a sender to send data to the transport.
-    fn tx(&self) -> mpsc::UnboundedSender<(
+    fn tx(
+        &self,
+    ) -> mpsc::UnboundedSender<(
         Vec<u8>,
         Option<oneshot::Sender<Result<(), crate::error::Error>>>,
     )>;

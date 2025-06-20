@@ -6,7 +6,7 @@ use tokio::{
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-use crate::{FlipperZeroRpcTransport, codec::FlipperZeroRpcCodec};
+use crate::{FzRpcTransport, codec::FzRpcCodec};
 use tokio::time::{Duration, timeout};
 
 const FLIPPER_BAUD_RATE: u32 = 115200;
@@ -44,8 +44,8 @@ impl UsbTransport {
 
         let (port_rx, port_tx) = tokio::io::split(port);
 
-        let port_rx = FramedRead::new(port_rx, FlipperZeroRpcCodec::default());
-        let port_tx = FramedWrite::new(port_tx, FlipperZeroRpcCodec::default());
+        let port_rx = FramedRead::new(port_rx, FzRpcCodec::default());
+        let port_tx = FramedWrite::new(port_tx, FzRpcCodec::default());
 
         let rx_sender = broadcast::Sender::new(32);
         let (tx_sender, tx_receiver) = mpsc::unbounded_channel();
@@ -62,7 +62,7 @@ impl UsbTransport {
     }
 
     async fn rx_task(
-        mut port_rx: FramedRead<ReadHalf<SerialStream>, FlipperZeroRpcCodec>,
+        mut port_rx: FramedRead<ReadHalf<SerialStream>, FzRpcCodec>,
         rx_sender: broadcast::Sender<Vec<u8>>,
     ) {
         while let Some(frame) = port_rx.next().await {
@@ -72,7 +72,7 @@ impl UsbTransport {
                     rx_sender.send(data).ok();
                 }
                 Err(_) => {
-                    // Because [`FlipperZeroRpcCodec`]'s implementation never returns an error,
+                    // Because [`FzRpcCodec`]'s implementation never returns an error,
                     // we can only end up here if [`FramedRead`] returns an error,
                     // which can only happen if we've reached an EOF and tried to read more data,
                     // which itself will never happen, because we would break out of the loop.
@@ -87,7 +87,7 @@ impl UsbTransport {
     }
 
     async fn tx_task(
-        mut port_tx: FramedWrite<WriteHalf<SerialStream>, FlipperZeroRpcCodec>,
+        mut port_tx: FramedWrite<WriteHalf<SerialStream>, FzRpcCodec>,
         mut tx_receiver: mpsc::UnboundedReceiver<(
             Vec<u8>,
             Option<oneshot::Sender<Result<(), crate::error::Error>>>,
@@ -138,7 +138,7 @@ async fn wait_for_pattern(
     })?
 }
 
-impl FlipperZeroRpcTransport for UsbTransport {
+impl FzRpcTransport for UsbTransport {
     fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>> {
         self.rx_sender.upgrade().map(|sender| sender.subscribe())
     }

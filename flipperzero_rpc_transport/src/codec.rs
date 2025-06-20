@@ -4,11 +4,11 @@ use std::io::{Error, Result};
 use tokio_util::codec::{Decoder, Encoder};
 
 #[derive(Default)]
-pub(crate) struct FlipperZeroRpcCodec {
+pub(crate) struct FzRpcCodec {
     buf: Vec<u8>,
 }
 
-impl Decoder for FlipperZeroRpcCodec {
+impl Decoder for FzRpcCodec {
     type Item = Vec<u8>;
     type Error = Error;
 
@@ -32,7 +32,7 @@ impl Decoder for FlipperZeroRpcCodec {
     }
 }
 
-impl Encoder<&[u8]> for FlipperZeroRpcCodec {
+impl Encoder<&[u8]> for FzRpcCodec {
     type Error = Error;
 
     fn encode(&mut self, data: &[u8], buf: &mut BytesMut) -> Result<()> {
