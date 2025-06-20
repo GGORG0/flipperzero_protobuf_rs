@@ -2,12 +2,10 @@ pub(crate) mod codec;
 pub mod error;
 pub mod usb;
 
-use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type CallbackChannel = oneshot::Sender<Result<(), crate::error::Error>>;
 
-#[async_trait]
 pub trait FzRpcTransport {
     /// Subscribe to the transport's receive channel.
     fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>>;
