@@ -6,7 +6,7 @@ use tokio::{
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tokio_util::codec::{FramedRead, FramedWrite};
 
-use crate::{FzRpcTransport, codec::FzRpcCodec};
+use crate::{CallbackChannel, FzRpcTransport, codec::FzRpcCodec};
 use tokio::time::{Duration, timeout};
 
 const FLIPPER_BAUD_RATE: u32 = 115200;
@@ -15,10 +15,7 @@ const START_RPC_COMMAND: [u8; 18] = *b"start_rpc_session\n";
 
 pub struct UsbTransport {
     rx_sender: broadcast::WeakSender<Vec<u8>>,
-    tx_sender: mpsc::UnboundedSender<(
-        Vec<u8>,
-        Option<oneshot::Sender<Result<(), crate::error::Error>>>,
-    )>,
+    tx_sender: mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)>,
 }
 
 impl UsbTransport {
@@ -90,7 +87,7 @@ impl UsbTransport {
         mut port_tx: FramedWrite<WriteHalf<SerialStream>, FzRpcCodec>,
         mut tx_receiver: mpsc::UnboundedReceiver<(
             Vec<u8>,
-            Option<oneshot::Sender<Result<(), crate::error::Error>>>,
+            Option<CallbackChannel>,
         )>,
     ) {
         while let Some((data, callback)) = tx_receiver.recv().await {
