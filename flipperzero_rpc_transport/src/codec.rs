@@ -16,19 +16,18 @@ impl Decoder for FzRpcCodec {
         self.buf.extend_from_slice(buf);
         buf.advance(buf.len());
 
-        match u64::decode_var(&self.buf) {
-            Some((frame_len, header_len)) => {
+        Ok(
+            u64::decode_var(&self.buf).and_then(|(frame_len, header_len)| {
                 if self.buf.len() >= frame_len as usize + header_len {
                     self.buf.drain(0..header_len);
                     let frame = self.buf.drain(0..frame_len as usize).collect();
 
-                    Ok(Some(frame))
+                    Some(frame)
                 } else {
-                    Ok(None)
+                    None
                 }
-            }
-            None => Ok(None),
-        }
+            }),
+        )
     }
 }
 
