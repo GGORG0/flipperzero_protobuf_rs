@@ -16,6 +16,9 @@ const START_RPC_COMMAND: [u8; 19] = *b"start_rpc_session\r\n";
 pub struct UsbTransport {
     rx_sender: broadcast::WeakSender<Vec<u8>>,
     tx_sender: mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)>,
+
+    rx_task_handle: tokio::task::JoinHandle<()>,
+    tx_task_handle: tokio::task::JoinHandle<()>,
 }
 
 impl UsbTransport {
@@ -47,14 +50,17 @@ impl UsbTransport {
         let rx_sender = broadcast::Sender::new(32);
         let (tx_sender, tx_receiver) = mpsc::unbounded_channel();
 
-        tokio::spawn(Self::rx_task(port_rx, rx_sender.clone()));
+        let rx_task_handle = tokio::spawn(Self::rx_task(port_rx, rx_sender.clone()));
         let rx_sender = rx_sender.downgrade();
 
-        tokio::spawn(Self::tx_task(port_tx, tx_receiver));
+        let tx_task_handle = tokio::spawn(Self::tx_task(port_tx, tx_receiver));
 
         Ok(UsbTransport {
             rx_sender,
             tx_sender,
+
+            rx_task_handle,
+            tx_task_handle,
         })
     }
 
@@ -142,5 +148,14 @@ impl FzRpcTransport for UsbTransport {
 
     fn tx(&self) -> mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)> {
         self.tx_sender.clone()
+    }
+}
+
+impl Drop for UsbTransport {
+    fn drop(&mut self) {
+        self.rx_task_handle.abort();
+        self.tx_task_handle.abort();
+
+        assert_eq!(self.rx_sender.strong_count(), 0);
     }
 }
