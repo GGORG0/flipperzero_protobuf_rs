@@ -32,8 +32,12 @@ impl UsbTransport {
         {
             let mut written = 0;
 
+            // We have to exclude the \n at the end of the command for... whatever reason.
+            // Else it would end up being the first byte of the first RPC frame.
             while written < START_RPC_COMMAND.len() - 1 {
-                written += port.write(&START_RPC_COMMAND[written..]).await?;
+                written += port
+                    .write(&START_RPC_COMMAND[written..(START_RPC_COMMAND.len() - 1)])
+                    .await?;
             }
 
             port.flush().await?;
