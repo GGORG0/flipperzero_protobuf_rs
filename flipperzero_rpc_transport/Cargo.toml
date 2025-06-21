@@ -6,8 +6,13 @@ edition = "2024"
 [dependencies]
 async-trait = "0.1.88"
 bytes = "1.10.1"
+flipperzero_protobuf_raw = { version = "0.25.0", path = "../flipperzero_protobuf_raw", optional = true }
 futures-util = { version = "0.3.31", features = ["sink"] }
 integer-encoding = "4.0.2"
 tokio = { version = "1.45.1", features = ["io-util", "sync", "time"] }
 tokio-serial = { version = "5.4.5", features = ["rt"] }
 tokio-util = { version = "0.7.15", features = ["codec"] }
+
+[features]
+default = ["proto"]
+proto = ["dep:flipperzero_protobuf_raw"]

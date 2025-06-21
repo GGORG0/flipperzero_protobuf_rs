@@ -1,0 +1,9 @@
+[package]
+name = "playground"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+flipperzero_rpc_transport = { version = "0.1.0", path = "../flipperzero_rpc_transport" }
+hex = "0.4.3"
+tokio = { version = "1.45.1", features = ["full"] }

@@ -1,7 +1,7 @@
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
-    sync::{broadcast, mpsc, oneshot},
+    sync::{broadcast, mpsc},
 };
 use tokio_serial::{SerialPortBuilderExt, SerialStream};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -11,7 +11,7 @@ use tokio::time::{Duration, timeout};
 
 const FLIPPER_BAUD_RATE: u32 = 115200;
 const CLI_PROMPT: [u8; 4] = *b"\n>: ";
-const START_RPC_COMMAND: [u8; 18] = *b"start_rpc_session\n";
+const START_RPC_COMMAND: [u8; 19] = *b"start_rpc_session\r\n";
 
 pub struct UsbTransport {
     rx_sender: broadcast::WeakSender<Vec<u8>>,
@@ -29,7 +29,7 @@ impl UsbTransport {
         {
             let mut written = 0;
 
-            while written < START_RPC_COMMAND.len() {
+            while written < START_RPC_COMMAND.len() - 1 {
                 written += port.write(&START_RPC_COMMAND[written..]).await?;
             }
 
@@ -85,15 +85,12 @@ impl UsbTransport {
 
     async fn tx_task(
         mut port_tx: FramedWrite<WriteHalf<SerialStream>, FzRpcCodec>,
-        mut tx_receiver: mpsc::UnboundedReceiver<(
-            Vec<u8>,
-            Option<CallbackChannel>,
-        )>,
+        mut tx_receiver: mpsc::UnboundedReceiver<(Vec<u8>, Option<CallbackChannel>)>,
     ) {
         while let Some((data, callback)) = tx_receiver.recv().await {
             let res = port_tx.send(&data).await;
             if let Some(callback) = callback {
-                callback.send(res.map_err(|e| e.into())).ok();
+                callback.send(res.map(|_| data).map_err(|e| e.into())).ok();
             }
         }
 
@@ -130,7 +127,10 @@ async fn wait_for_pattern(
     timeout(Duration::from_secs(5), inner).await.map_err(|_| {
         tokio_serial::Error::new(
             tokio_serial::ErrorKind::Io(std::io::ErrorKind::TimedOut),
-            "Timed out waiting for pattern",
+            format!(
+                "Timed out waiting for pattern: `{}`",
+                String::from_utf8_lossy(pattern)
+            ),
         )
     })?
 }
@@ -140,12 +140,7 @@ impl FzRpcTransport for UsbTransport {
         self.rx_sender.upgrade().map(|sender| sender.subscribe())
     }
 
-    fn tx(
-        &self,
-    ) -> mpsc::UnboundedSender<(
-        Vec<u8>,
-        Option<oneshot::Sender<Result<(), crate::error::Error>>>,
-    )> {
+    fn tx(&self) -> mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)> {
         self.tx_sender.clone()
     }
 }

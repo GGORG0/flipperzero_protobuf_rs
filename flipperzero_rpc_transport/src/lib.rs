@@ -2,10 +2,13 @@ pub(crate) mod codec;
 pub mod error;
 pub mod usb;
 
+#[cfg(feature = "proto")]
+pub mod proto;
+
 use async_trait::async_trait;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-pub type CallbackChannel = oneshot::Sender<Result<(), crate::error::Error>>;
+pub type CallbackChannel = oneshot::Sender<Result<Vec<u8>, crate::error::Error>>;
 
 #[async_trait]
 pub trait FzRpcTransport: Send + Sync {
@@ -31,7 +34,7 @@ pub trait FzRpcTransport: Send + Sync {
     fn tx(&self) -> mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)>;
 
     /// Write a single frame to the transport.
-    async fn write(&self, data: Vec<u8>) -> Result<(), crate::error::Error> {
+    async fn write(&self, data: Vec<u8>) -> Result<Vec<u8>, crate::error::Error> {
         let tx = self.tx();
 
         let (callback_tx, callback_rx) = oneshot::channel();
