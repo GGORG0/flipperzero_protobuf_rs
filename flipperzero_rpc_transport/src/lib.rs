@@ -7,25 +7,12 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 pub type CallbackChannel = oneshot::Sender<Result<(), crate::error::Error>>;
 
-pub trait FzRpcTransport {
+#[async_trait]
+pub trait FzRpcTransport: Send + Sync {
     /// Subscribe to the transport's receive channel.
     fn rx(&self) -> Option<broadcast::Receiver<Vec<u8>>>;
 
-    /// Create a sender to send data to the transport.
-    fn tx(&self) -> mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)>;
-}
-
-#[async_trait]
-pub trait FzRpcTransportExt {
     /// Read a single frame from the transport.
-    async fn read(&self) -> Result<Vec<u8>, crate::error::Error>;
-
-    /// Write a single frame to the transport.
-    async fn write(&self, data: Vec<u8>) -> Result<(), crate::error::Error>;
-}
-
-#[async_trait]
-impl<T: FzRpcTransport + Send + Sync> FzRpcTransportExt for T {
     async fn read(&self) -> Result<Vec<u8>, crate::error::Error> {
         let mut rx = self.rx().ok_or_else(|| {
             std::io::Error::new(
@@ -40,6 +27,10 @@ impl<T: FzRpcTransport + Send + Sync> FzRpcTransportExt for T {
         Ok(data)
     }
 
+    /// Create a sender to send data to the transport.
+    fn tx(&self) -> mpsc::UnboundedSender<(Vec<u8>, Option<CallbackChannel>)>;
+
+    /// Write a single frame to the transport.
     async fn write(&self, data: Vec<u8>) -> Result<(), crate::error::Error> {
         let tx = self.tx();
 
