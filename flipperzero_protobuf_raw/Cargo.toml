@@ -11,13 +11,13 @@ categories = ["external-ffi-bindings"]
 [dependencies]
 pbjson = "0.7.0"
 pbjson-types = "0.7.0"
-prost = "0.13.5"
+prost = "0.14.1"
 serde = "1.0.219"
 
 [build-dependencies]
-miette = { version = "7.5.0", features = ["fancy"] }
+miette = { version = "7.6.0", features = ["fancy"] }
 pbjson-build = "0.7.0"
-prost = "0.13.5"
-prost-build = "0.13.5"
-protox = "0.8.0"
+prost = "0.14.1"
+prost-build = "0.14.1"
+protox = "0.9.0"
 quote = "1.0.40"
